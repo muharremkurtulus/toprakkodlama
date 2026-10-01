@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toprak'ın Kodlama Macerası</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Baloo 2 for a playful, kid-friendly look -->
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Baloo 2', cursive;
+            background-color: #21a821; /* Deep green background from image */
+            /* Add subtle wavy/confetti pattern if desired, here just a plain color to closely match */
+            background-image: 
+                url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M10,20 Q15,10 25,20 T40,20" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2" stroke-linecap="round"/></svg>');
+            background-size: 150px 150px;
+            overflow: hidden;
+            touch-action: manipulation;
+            margin: 0;
+            padding: 0;
+            /* Light blue border around the entire screen */
+            border: 12px solid #8ecae6; 
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Generic bounce animation for interactive elements */
+        .btn-bounce {
+            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+        }
+        .btn-bounce:active {
+            transform: scale(0.9);
+        }
+        .btn-bounce:hover {
+            transform: scale(1.05);
+        }
+
+        /* --- SCREENS --- */
+        .screen {
+            display: none;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 100;
+        }
+        .screen.active {
+            display: flex;
+        }
+        
+        #screen-game {
+            display: none;
+            z-index: 10; 
+            background-color: transparent; /* Rely on body bg */
+        }
+        #screen-game.active {
+            display: flex;
+        }
+
+        /* --- GAME BOARD --- */
+        .game-grid {
+            display: grid;
+            width: 100%;
+            height: 100%;
+        }
+
+        .grid-cell {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Walls and obstacles */
+        .grid-cell.wall {
+            background-color: #a1a1aa !important; /* Gray block */
+            border: 4px solid #71717a;
+            border-radius: 8px;
+            transform: scale(0.95);
+        }
+        .grid-cell.water {
+            background-color: #38bdf8 !important; 
+            animation: ripple 2s infinite ease-in-out alternate;
+            border-radius: 8px;
+            transform: scale(0.95);
+        }
+
+        @keyframes ripple {
+            0% { background-color: #38bdf8; }
+            100% { background-color: #0ea5e9; }
+        }
+
+        /* Entities */
+        .entity {
+            position: absolute;
+            width: 80%;
+            height: 80%;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            transition: top 0.3s ease, left 0.3s ease; 
+            z-index: 10;
+            border-radius: 50%;
+        }
+
+        /* --- CONTROL PANEL --- */
+        .wood-panel {
+            background-color: #cc7f29; /* Base wood color */
+            border-top: 8px solid #a35c17; /* Darker edge */
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.2);
+            position: relative;
+            z-index: 20;
+        }
+        
+        /* Subtle wood grain */
+        .wood-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 15px,
+                rgba(0,0,0,0.03) 15px,
+                rgba(0,0,0,0.03) 30px
+            );
+            pointer-events: none;
+        }
+
+        .command-palette {
+            background-color: #f7d294; /* Sandy beige */
+            box-shadow: inset 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .active-block {
+            box-shadow: 0 0 0 4px white, 0 0 15px white !important;
+            transform: scale(1.15) !important;
+            z-index: 30;
+        }
+
+        /* Modals */
+        .modal-bg {
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+        }
+        .panel-menu {
+            background-color: #fde68a;
+            border: 8px solid #d97706;
+            border-radius: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+
+        /* Scrollbar hiding for level menu */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
+</head>
+<body>
+
+<div id="screen-menu" class="screen active justify-center items-center">
+    <div class="text-center p-8 panel-menu max-w-md w-full mx-4 relative overflow-hidden">
+        <h1 class="text-5xl font-extrabold text-[#92400e] mb-4 drop-shadow-md tracking-wide">Toprak'ın<br>Kodlama Macerası</h1>
+        <p class="text-xl text-yellow-900 mb-8 font-semibold">Hindistan cevizini bulmasına yardım et!</p>
+        
+        <div class="w-48 h-48 mx-auto mb-8 bg-white/50 rounded-full border-4 border-dashed border-[#d97706] flex items-center justify-center p-2 shadow-inner">
+            <img id="menu-player-img" src="https://placehold.co/1080x1080/14b8a6/ffffff?text=Toprak" alt="Toprak" class="w-full h-full object-cover rounded-full shadow-md">
+        </div>
+
+        <button onclick="showScreen('screen-levels')" class="btn-bounce w-full py-4 bg-[#38bdf8] text-white text-3xl font-bold rounded-full shadow-[0_6px_0_#0284c7] border-4 border-white mb-2">
+            <i class="fas fa-play mr-2"></i> Başla
+        </button>
+    </div>
+</div>
+
+<div id="screen-levels" class="screen justify-center items-center">
+    <div class="absolute top-4 left-4 z-10">
+         <button onclick="showScreen('screen-menu')" class="btn-bounce bg-[#374151] text-white w-12 h-12 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-xl">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+    </div>
+    
+    <div class="panel-menu p-6 w-full max-w-4xl max-h-[85vh] flex flex-col m-4">
+        <h2 class="text-4xl font-extrabold text-center text-[#92400e] mb-6 drop-shadow-sm">Bölümler</h2>
+        <div class="overflow-y-auto flex-1 p-2 no-scrollbar">
+            <div id="level-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 sm:gap-6 pb-4">
+                <!-- Levels injected here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="screen-game" class="screen flex-col justify-between">
+    
+    <!-- Top Bar -->
+    <div class="w-full flex justify-between items-center p-4 z-20">
+        <button onclick="showScreen('screen-levels')" class="btn-bounce bg-[#4a4a4a] text-white w-12 h-12 rounded-full flex justify-center items-center text-xl shadow-md border-2 border-white">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <h2 id="current-level-title" class="text-3xl font-bold text-gray-800 drop-shadow-[0_2px_2px_rgba(255,255,255,0.8)]">Level 1</h2>
+        <div class="w-12"></div> <!-- Spacer -->
+    </div>
+
+    <!-- Game Board Area -->
+    <div class="flex-grow flex items-center justify-center p-2 sm:p-4 w-full max-w-5xl mx-auto overflow-hidden">
+        <!-- Bright green wrapper -->
+        <div class="w-full bg-[#1ddb1d] rounded-[2rem] p-2 sm:p-4 shadow-xl flex items-center justify-center h-full max-h-[60vh] relative border-[6px] border-[#13a813]">
+            <!-- Grid Container -->
+            <div id="grid-container" class="game-grid rounded-xl overflow-hidden shadow-inner">
+                <!-- Cells injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="wood-panel w-full flex flex-col pt-4 pb-2 sm:pb-6 px-2 sm:px-4 h-[35vh] min-h-[220px]">
+        
+        <!-- Commands Row -->
+        <div class="flex items-center justify-center gap-2 sm:gap-4 mb-4 sm:mb-6 w-full max-w-4xl mx-auto">
+            
+            <!-- GO Button -->
+            <button id="run-btn" onclick="executeCommands()" class="btn-bounce bg-[#00b4ff] text-white text-2xl sm:text-3xl font-extrabold py-2 sm:py-3 px-6 sm:px-10 rounded-[2rem] border-[4px] border-white shadow-[0_5px_0_#0284c7] active:shadow-none active:translate-y-1 z-10">
+                Go
+            </button>
+            
+            <!-- Command Palette Container (Recessed look) -->
+            <div class="command-palette flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-full flex-grow overflow-x-auto border-t-4 border-l-4 border-black/10">
+                <!-- Directional Buttons (Pink) -->
+                <button onclick="addCommand('left')" class="btn-bounce flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#ff5a79] border-[3px] border-white text-white text-xl sm:text-2xl flex justify-center items-center shadow-[0_3px_0_rgba(0,0,0,0.2)]">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <button onclick="addCommand('right')" class="btn-bounce flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#ff5a79] border-[3px] border-white text-white text-xl sm:text-2xl flex justify-center items-center shadow-[0_3px_0_rgba(0,0,0,0.2)]">
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+                <button onclick="addCommand('up')" class="btn-bounce flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#ff5a79] border-[3px] border-white text-white text-xl sm:text-2xl flex justify-center items-center shadow-[0_3px_0_rgba(0,0,0,0.2)]">
+                    <i class="fas fa-arrow-up"></i>
+                </button>
+                <button onclick="addCommand('down')" class="btn-bounce flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#ff5a79] border-[3px] border-white text-white text-xl sm:text-2xl flex justify-center items-center shadow-[0_3px_0_rgba(0,0,0,0.2)]">
+                    <i class="fas fa-arrow-down"></i>
+                </button>
+                
+                <!-- Spacer -->
+                <div class="flex-grow"></div>
+                
+                <!-- Action / Clear Button (Purple) -->
+                <button onclick="clearWorkspace()" class="btn-bounce flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#c065fc] border-[3px] border-white text-white text-xl sm:text-2xl flex justify-center items-center shadow-[0_3px_0_rgba(0,0,0,0.2)]" title="Temizle">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Sequence Slots (Workspace) -->
+        <div class="flex justify-center w-full max-w-4xl mx-auto px-2">
+            <div id="workspace" class="flex gap-2 sm:gap-3 w-full justify-between items-center h-16 overflow-x-auto no-scrollbar pb-2">
+                <!-- Circular slots injected by JS -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div id="modal-success" class="fixed inset-0 modal-bg z-[110] hidden flex-col justify-center items-center">
+    <div class="panel-menu p-8 max-w-sm w-full mx-4 text-center">
+        <h2 class="text-5xl font-extrabold text-[#d97706] mb-2 drop-shadow-md">Harika!</h2>
+        <p class="text-yellow-900 mb-6 font-semibold text-lg">Toprak hedefine ulaştı!</p>
+        
+        <div id="stars-container" class="flex justify-center gap-2 mb-8 h-24 items-center">
+            <!-- Stars injected -->
+        </div>
+
+        <div class="flex flex-col gap-4">
+            <button onclick="nextLevel()" class="btn-bounce w-full bg-[#1ddb1d] text-white py-4 rounded-full font-bold text-2xl shadow-[0_5px_0_#13a813] border-4 border-white">
+                Sonraki Bölüm <i class="fas fa-forward ml-2"></i>
+            </button>
+            <button onclick="hideModal('modal-success'); showScreen('screen-levels');" class="btn-bounce w-full bg-yellow-100 text-yellow-800 py-3 rounded-full font-bold shadow-md border-4 border-yellow-300">
+                Bölümlere Dön
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Failure Modal -->
+<div id="modal-fail" class="fixed inset-0 modal-bg z-[110] hidden flex-col justify-center items-center">
+    <div class="panel-menu p-8 max-w-sm w-full mx-4 text-center border-red-500 border-8 relative">
+        <div class="text-red-500 text-7xl mb-4 drop-shadow-md"><i class="fas fa-times-circle"></i></div>
+        <h2 class="text-4xl font-extrabold text-red-600 mb-2">Olamaz!</h2>
+        <p id="fail-message" class="text-yellow-900 mb-8 font-semibold text-lg">Toprak hedefe ulaşamadı.</p>
+        
+        <button onclick="hideModal('modal-fail'); resetLevel();" class="btn-bounce w-full bg-[#00b4ff] text-white py-4 rounded-full font-bold text-2xl shadow-[0_5px_0_#0284c7] border-4 border-white">
+            <i class="fas fa-redo mr-2"></i> Tekrar Dene
+        </button>
+    </div>
+</div>
+
+<script>
+    // --- Config & Assets ---
+    const ASSETS = {
+        player: 'toprak.png',
+        goal: 'ceviz.png'
+    };
+
+    const MAX_COMMANDS = 12; // Maksimum hamle sayısı 12'ye çıkarıldı
+    let currentLevelIndex = 0;
+    let playerPos = { x: 0, y: 0 };
+    let commands = [];
+    let isExecuting = false;
+    let savedProgress = JSON.parse(localStorage.getItem('toprakGameProgressV3')) || [0]; 
+    
+    // Fill out saved progress array to 15 slots
+    if (savedProgress.length < 15) {
+        let temp = new Array(15).fill(-1); 
+        for(let i=0; i<savedProgress.length; i++) temp[i] = savedProgress[i];
+        if (temp[0] === -1) temp[0] = 0; 
+        savedProgress = temp;
+    }
+
+    // --- STREAMING_CHUNK:Defining 15 Levels Data... ---
+    // 0: Empty, 1: Wall, 2: Water, 'P': Player Start, 'G': Goal
+    // Kademeli zorluk: 1-3 çok kolay, 4-12 maks 8 hamle, 13-15 zor (10-12 hamle)
+    const LEVELS = [
+        // Level 1: Çok Kolay (3 Hamle: Sağ, Sağ, Sağ)
+        { cols: 5, rows: 3, grid: [ [0,0,0,0,0], ['P',0,0,'G',0], [0,0,0,0,0] ], idealMoves: 3 },
+        // Level 2: Kolay (4 Hamle: Sağ, Sağ, Aşağı, Aşağı)
+        { cols: 5, rows: 4, grid: [ [0,0,0,0,0], [0,'P',0,0,0], [0,0,1,0,0], [0,0,0,'G',0] ], idealMoves: 4 },
+        // Level 3: Kolay (5 Hamle: Aşağı, Sağ, Sağ, Sağ, Yukarı)
+        { cols: 6, rows: 4, grid: [ [0,0,0,0,0,0], [0,'P',1,0,'G',0], [0,0,0,0,0,0], [0,0,0,0,0,0] ], idealMoves: 5 },
+        // Level 4: Orta (6 Hamle: 3 Sağ, 3 Aşağı)
+        { cols: 6, rows: 6, grid: [ [1,1,1,1,1,1], [1,'P',0,0,0,1], [1,0,1,1,0,1], [1,0,1,1,0,1], [1,0,0,0,'G',1], [1,1,1,1,1,1] ], idealMoves: 6 },
+        // Level 5: Orta (6 Hamle: Aşağı, Aşağı, Sağ, Sağ, Yukarı, Yukarı)
+        { cols: 6, rows: 5, grid: [ [1,1,1,1,1,1], [1,'P',1,0,'G',1], [1,0,1,0,1,1], [1,0,0,0,1,1], [1,1,1,1,1,1] ], idealMoves: 6 },
+        // Level 6: Orta (7 Hamle: 3 Sağ, 2 Aşağı, 2 Sol)
+        { cols: 6, rows: 5, grid: [ [1,1,1,1,1,1], [1,'P',0,0,0,1], [1,1,1,1,0,1], [1,'G',0,0,0,1], [1,1,1,1,1,1] ], idealMoves: 7 },
+        // Level 7: Orta (7 Hamle: 3 Sağ, 2 Yukarı, 2 Sol)
+        { cols: 6, rows: 5, grid: [ [1,1,1,1,1,1], [1,0,0,'G',0,1], [1,0,1,1,1,1], [1,'P',0,0,0,1], [1,1,1,1,1,1] ], idealMoves: 7 },
+        // Level 8: Orta (8 Hamle: Engelin etrafından)
+        { cols: 6, rows: 6, grid: [ [1,1,1,1,1,1], [1,'P',1,'G',0,1], [1,0,1,0,1,1], [1,0,0,0,0,1], [1,1,1,1,1,1], [1,1,1,1,1,1] ], idealMoves: 8 },
+        // Level 9: Orta (8 Hamle: U dönüşü)
+        { cols: 6, rows: 6, grid: [ [1,1,1,1,1,1], [1,0,0,0,'P',1], [1,0,1,1,1,1], [1,0,0,0,0,1], [1,1,1,1,'G',1], [1,1,1,1,1,1] ], idealMoves: 8 },
+        // Level 10: Orta (8 Hamle)
+        { cols: 7, rows: 5, grid: [ [1,1,1,1,1,1,1], [1,'P',0,1,0,'G',1], [1,1,0,1,0,1,1], [1,0,0,0,0,0,1], [1,1,1,1,1,1,1] ], idealMoves: 8 },
+        // Level 11: Orta (8 Hamle)
+        { cols: 7, rows: 6, grid: [ [1,1,1,1,1,1,1], [1,0,0,'G',0,0,1], [1,0,1,1,1,0,1], [1,0,1,'P',1,0,1], [1,0,0,0,0,0,1], [1,1,1,1,1,1,1] ], idealMoves: 8 },
+        // Level 12: Orta (8 Hamle: Sudan kaçınma)
+        { cols: 7, rows: 6, grid: [ [1,1,1,1,1,1,1], [1,'P',2,2,2,'G',1], [1,0,2,2,2,0,1], [1,0,0,0,0,0,1], [1,1,1,1,1,1,1], [1,1,1,1,1,1,1] ], idealMoves: 8 },
+        // Level 13: Zor (10 Hamle: Büyük Çevre)
+        { cols: 8, rows: 6, grid: [ [1,1,1,1,1,1,1,1], [1,'G',0,1,0,'P',0,1], [1,1,0,1,0,1,0,1], [1,0,0,0,0,0,0,1], [1,1,1,1,1,1,1,1], [1,1,1,1,1,1,1,1] ], idealMoves: 10 },
+        // Level 14: Zor (11 Hamle: Yılan Yolu)
+        { cols: 8, rows: 6, grid: [ [1,1,1,1,1,1,1,1], [1,'P',0,1,'G',0,0,1], [1,1,0,1,1,1,0,1], [1,0,0,0,0,0,0,1], [1,1,1,1,1,1,1,1], [1,1,1,1,1,1,1,1] ], idealMoves: 11 },
+        // Level 15: En Zor (12 Hamle: Tam Tur C Şekli)
+        { cols: 8, rows: 6, grid: [ [1,1,1,1,1,1,1,1], [1,0,0,0,0,0,'G',1], [1,0,1,1,1,1,1,1], [1,0,0,0,0,0,'P',1], [1,1,1,1,1,1,1,1], [1,1,1,1,1,1,1,1] ], idealMoves: 12 }
+    ];
+
+    // --- DOM Elements ---
+    const gridContainer = document.getElementById('grid-container');
+    const workspace = document.getElementById('workspace');
+    const levelGrid = document.getElementById('level-grid');
+    const runBtn = document.getElementById('run-btn');
+
+    document.getElementById('menu-player-img').src = ASSETS.player;
+
+    function saveProgress() {
+        localStorage.setItem('toprakGameProgressV3', JSON.stringify(savedProgress));
+    }
+
+    // --- STREAMING_CHUNK:Implementing navigation and rendering core logic... ---
+    function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+        
+        if (screenId === 'screen-levels') {
+            renderLevelSelection();
+        } else if (screenId === 'screen-game') {
+            loadLevel(currentLevelIndex);
+        }
+    }
+
+    function hideModal(modalId) {
+        document.getElementById(modalId).classList.replace('flex', 'hidden');
+    }
+    
+    function showModal(modalId) {
+        document.getElementById(modalId).classList.replace('hidden', 'flex');
+    }
+
+    function renderLevelSelection() {
+        levelGrid.innerHTML = '';
+        for (let i = 0; i < LEVELS.length; i++) {
+            const status = savedProgress[i];
+            const isLocked = status === -1;
+            
+            const btn = document.createElement('button');
+            btn.className = `aspect-square rounded-2xl flex flex-col items-center justify-center text-3xl font-extrabold shadow-[0_6px_0_rgba(0,0,0,0.2)] border-[4px] transition-transform relative overflow-hidden ${isLocked ? 'bg-[#92400e] border-[#78350f] text-[#78350f] opacity-80 cursor-not-allowed' : 'btn-bounce bg-[#fde68a] border-[#d97706] text-[#b45309]'}`;
+            
+            if (isLocked) {
+                btn.innerHTML = `<i class="fas fa-lock text-2xl"></i>`;
+            } else {
+                btn.onclick = () => {
+                    currentLevelIndex = i;
+                    showScreen('screen-game');
+                };
+                
+                let starsHTML = '';
+                for(let s=0; s<3; s++) {
+                    starsHTML += `<i class="fas fa-star text-sm ${s < status ? 'text-yellow-500 drop-shadow-sm' : 'text-yellow-800/30'}"></i>`;
+                }
+                
+                btn.innerHTML = `
+                    <span class="z-10">${i + 1}</span>
+                    <div class="absolute bottom-2 w-full flex justify-center gap-1 z-10">${starsHTML}</div>
+                `;
+            }
+            levelGrid.appendChild(btn);
+        }
+    }
+
+    // --- STREAMING_CHUNK:Implementing safe level loading to prevent null errors... ---
+    function loadLevel(index) {
+        if (isExecuting) return;
+        
+        // 1. Reset command array directly before rendering
+        commands = []; 
+        
+        const level = LEVELS[index];
+        document.getElementById('current-level-title').innerText = `Bölüm ${index + 1}`;
+        
+        // 2. Build game board
+        gridContainer.style.gridTemplateColumns = `repeat(${level.cols}, 1fr)`;
+        gridContainer.style.gridTemplateRows = `repeat(${level.rows}, 1fr)`;
+        gridContainer.innerHTML = '';
+
+        for (let y = 0; y < level.rows; y++) {
+            for (let x = 0; x < level.cols; x++) {
+                const cellVal = level.grid[y][x];
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                
+                // Yellow Checkerboard pattern matching the image
+                if ((x + y) % 2 === 0) {
+                    cell.style.backgroundColor = '#ffe32a'; // Lighter yellow
+                } else {
+                    cell.style.backgroundColor = '#ffc107'; // Darker yellow
+                }
+
+                if (cellVal === 1) cell.classList.add('wall');
+                if (cellVal === 2) cell.classList.add('water');
+                
+                if (cellVal === 'P') playerPos = { x, y };
+                
+                if (cellVal === 'G') {
+                    const goalImg = document.createElement('div');
+                    goalImg.className = 'entity flex justify-center items-center text-4xl sm:text-5xl';
+                    goalImg.style.backgroundColor = 'rgba(255, 255, 255, 0.4)'; // Hafif arka plan
+                    goalImg.style.animation = 'bounce 2s infinite';
+                    // Resim yüklenemezse (henüz dosyayı koymadıysanız) otomatik emoji gösterir
+                    goalImg.innerHTML = `<img src="${ASSETS.goal}" onerror="this.outerHTML='🥥'" class="w-full h-full object-contain relative z-10 drop-shadow-md">`;
+                    cell.appendChild(goalImg);
+                }
+                
+                gridContainer.appendChild(cell);
+            }
+        }
+
+        // Add Player
+        const playerEl = document.createElement('div');
+        playerEl.id = 'player';
+        playerEl.className = 'entity flex justify-center items-center text-4xl sm:text-5xl';
+        playerEl.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.4)';
+        playerEl.style.border = '4px solid white';
+        playerEl.style.backgroundColor = '#38bdf8'; // Geçici mavi arka plan
+        // Resim yüklenemezse otomatik emoji gösterir
+        playerEl.innerHTML = `<img src="${ASSETS.player}" onerror="this.outerHTML='🧒'" class="w-full h-full object-cover relative z-10 rounded-full">`;
+        gridContainer.appendChild(playerEl);
+        
+        updatePlayerVisuals(level);
+        
+        // 3. Generate slots and render empty commands safely
+        initWorkspaceSlots();
+    }
+
+    function resetLevel() {
+        if (isExecuting) return;
+        loadLevel(currentLevelIndex);
+    }
+
+    function updatePlayerVisuals(level) {
+        const playerEl = document.getElementById('player');
+        if (!playerEl) return;
+        
+        const cellWidth = 100 / level.cols;
+        const cellHeight = 100 / level.rows;
+        
+        playerEl.style.left = `calc(${playerPos.x * cellWidth}% + ${cellWidth * 0.1}%)`;
+        playerEl.style.top = `calc(${playerPos.y * cellHeight}% + ${cellHeight * 0.1}%)`;
+        playerEl.style.width = `${cellWidth * 0.8}%`;
+        playerEl.style.height = `${cellHeight * 0.8}%`;
+    }
+
+    // --- STREAMING_CHUNK:Managing the workspace slot UI and logic... ---
+    const CMD_ICONS = {
+        'up': 'fa-arrow-up',
+        'down': 'fa-arrow-down',
+        'left': 'fa-arrow-left',
+        'right': 'fa-arrow-right'
+    };
+
+    function initWorkspaceSlots() {
+        workspace.innerHTML = '';
+        for(let i=0; i<MAX_COMMANDS; i++) {
+            const slot = document.createElement('div');
+            // Circular, dark wood recessed look. Sized slightly smaller to fit 12 commands comfortably
+            slot.className = 'w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-[#965212] shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)] flex justify-center items-center flex-shrink-0 relative';
+            slot.id = `slot-${i}`;
+            workspace.appendChild(slot);
+        }
+        renderCommands();
+    }
+
+    function addCommand(cmd) {
+        if (isExecuting || commands.length >= MAX_COMMANDS) return;
+        commands.push(cmd);
+        renderCommands();
+    }
+
+    function removeCommand(index) {
+        if (isExecuting) return;
+        commands.splice(index, 1);
+        renderCommands();
+    }
+
+    function clearWorkspace() {
+        if (isExecuting) return;
+        commands = [];
+        renderCommands();
+    }
+
+    function renderCommands() {
+        for(let i=0; i<MAX_COMMANDS; i++) {
+            const slot = document.getElementById(`slot-${i}`);
+            if (!slot) continue; // Safety check prevents TypeError
+            
+            slot.innerHTML = '';
+            
+            if (i < commands.length) {
+                const cmd = commands[i];
+                const block = document.createElement('div');
+                block.id = `cmd-${i}`;
+                // Pink button color matching image. Text scaled down slightly on mobile to ensure perfect fit.
+                block.className = 'btn-bounce w-full h-full rounded-full border-[2px] sm:border-[3px] border-white flex justify-center items-center text-white text-lg sm:text-2xl shadow-[0_3px_0_rgba(0,0,0,0.2)] cursor-pointer bg-[#ff5a79] absolute inset-0 m-auto';
+                
+                block.innerHTML = `<i class="fas ${CMD_ICONS[cmd]}"></i>`;
+                block.onclick = () => removeCommand(i);
+                slot.appendChild(block);
+            }
+        }
+    }
+
+    // --- STREAMING_CHUNK:Executing movement logic and animation... ---
+    async function executeCommands() {
+        if (isExecuting || commands.length === 0) return;
+        isExecuting = true;
+        
+        runBtn.style.opacity = '0.7';
+        runBtn.style.pointerEvents = 'none';
+
+        const level = LEVELS[currentLevelIndex];
+        let currentPos = { ...playerPos };
+        let failed = false;
+
+        for (let i = 0; i < commands.length; i++) {
+            const block = document.getElementById(`cmd-${i}`);
+            if (block) block.classList.add('active-block');
+
+            const cmd = commands[i];
+            let nextPos = { ...currentPos };
+
+            if (cmd === 'up') nextPos.y--;
+            if (cmd === 'down') nextPos.y++;
+            if (cmd === 'left') nextPos.x--;
+            if (cmd === 'right') nextPos.x++;
+
+            await new Promise(resolve => setTimeout(resolve, 400));
+
+            // Bounds and collision
+            if (nextPos.x < 0 || nextPos.x >= level.cols || nextPos.y < 0 || nextPos.y >= level.rows) {
+                failed = true;
+                document.getElementById('fail-message').innerText = "Toprak haritanın dışına çıktı!";
+                break;
+            }
+
+            const cellVal = level.grid[nextPos.y][nextPos.x];
+            if (cellVal === 1) {
+                failed = true;
+                document.getElementById('fail-message').innerText = "Toprak bir duvara çarptı!";
+                break;
+            }
+            if (cellVal === 2) {
+                 failed = true;
+                document.getElementById('fail-message').innerText = "Toprak suya düştü!";
+                break;
+            }
+
+            // Move
+            currentPos = nextPos;
+            playerPos = { ...currentPos };
+            updatePlayerVisuals(level);
+
+            if (block) block.classList.remove('active-block');
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Evaluate Result
+        if (failed) {
+            showModal('modal-fail');
+        } else if (level.grid[currentPos.y][currentPos.x] === 'G') {
+            handleWin();
+        } else {
+            document.getElementById('fail-message').innerText = "Toprak hedefe ulaşamadı. Kodu kontrol et.";
+            showModal('modal-fail');
+        }
+
+        isExecuting = false;
+        runBtn.style.opacity = '1';
+        runBtn.style.pointerEvents = 'auto';
+    }
+
+    // --- STREAMING_CHUNK:Handling win conditions and saving progress... ---
+    function handleWin() {
+        const level = LEVELS[currentLevelIndex];
+        const ideal = level.idealMoves;
+        const used = commands.length;
+        
+        let stars = 1;
+        if (used <= ideal + 2) stars = 2;
+        if (used <= ideal) stars = 3;
+
+        if (stars > savedProgress[currentLevelIndex]) {
+            savedProgress[currentLevelIndex] = stars;
+        }
+        if (currentLevelIndex + 1 < LEVELS.length && savedProgress[currentLevelIndex + 1] === -1) {
+            savedProgress[currentLevelIndex + 1] = 0;
+        }
+        saveProgress();
+
+        // Animate stars
+        const starsContainer = document.getElementById('stars-container');
+        starsContainer.innerHTML = '';
+        for (let i = 0; i < 3; i++) {
+            const star = document.createElement('i');
+            star.className = `fas fa-star text-6xl ${i < stars ? 'text-yellow-400 drop-shadow-[0_4px_4px_rgba(0,0,0,0.3)]' : 'text-yellow-800/20'}`;
+            
+            if(i < stars) {
+                star.style.animation = `starPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards ${i * 0.2}s`;
+                star.style.opacity = '0';
+                star.style.transform = 'scale(0)';
+            }
+            starsContainer.appendChild(star);
+        }
+
+        if(!document.getElementById('star-keyframe')) {
+            const style = document.createElement('style');
+            style.id = 'star-keyframe';
+            style.innerHTML = `
+                @keyframes starPop {
+                    0% { transform: scale(0); opacity: 0; }
+                    50% { transform: scale(1.3); opacity: 1; }
+                    100% { transform: scale(1); opacity: 1; }
+                }
+                @keyframes bounce {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-10%); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        showModal('modal-success');
+    }
+
+    function nextLevel() {
+        hideModal('modal-success');
+        if (currentLevelIndex < LEVELS.length - 1) {
+            currentLevelIndex++;
+            showScreen('screen-game');
+        } else {
+            showScreen('screen-levels');
+            setTimeout(() => alert("Tebrikler! Tüm bölümleri tamamladın!"), 300);
+        }
+    }
+
+    // Start App
+    showScreen('screen-menu');
+
+</script>
+</body>
+</html>
