@@ -70,8 +70,7 @@
         /* --- GAME BOARD --- */
         .game-grid {
             display: grid;
-            width: 100%;
-            height: 100%;
+            margin: auto;
         }
 
         .grid-cell {
@@ -105,14 +104,16 @@
         /* Entities */
         .entity {
             position: absolute;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: top 0.3s ease, left 0.3s ease; 
+            z-index: 50;
+        }
+        .entity img {
             width: 80%;
             height: 80%;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            transition: top 0.3s ease, left 0.3s ease; 
-            z-index: 10;
-            border-radius: 50%;
+            object-fit: contain;
         }
 
         /* --- CONTROL PANEL --- */
@@ -429,6 +430,30 @@
         }
     }
 
+    // Oyun tahtasının boyutunu karelere tam oturtan hesaplama fonksiyonu
+    function updateGridSize() {
+        const wrapper = gridContainer.parentElement;
+        const level = LEVELS[currentLevelIndex];
+        if (!wrapper || !level) return;
+
+        const w = wrapper.clientWidth - 32; // Kenar boşlukları hesaplanıyor
+        const h = wrapper.clientHeight - 32;
+        
+        // Hücrelerin her zaman kusursuz kare olması için minimum oranı belirliyoruz
+        const cellSize = Math.min(w / level.cols, h / level.rows);
+        
+        // Zemin genişliğini esnemesini önleyip doğrudan karelerin toplamına kilitliyoruz
+        gridContainer.style.width = `${cellSize * level.cols}px`;
+        gridContainer.style.height = `${cellSize * level.rows}px`;
+    }
+
+    // Ekran boyutu değiştiğinde ızgarayı otomatik yenile
+    window.addEventListener('resize', () => {
+        if (document.getElementById('screen-game').classList.contains('active')) {
+            updateGridSize();
+        }
+    });
+
     // --- STREAMING_CHUNK:Implementing safe level loading to prevent null errors... ---
     function loadLevel(index) {
         if (isExecuting) return;
@@ -442,6 +467,7 @@
         // 2. Build game board
         gridContainer.style.gridTemplateColumns = `repeat(${level.cols}, 1fr)`;
         gridContainer.style.gridTemplateRows = `repeat(${level.rows}, 1fr)`;
+        gridContainer.style.position = 'relative'; // Kritik düzeltme: Toprak'ın harita dışına çıkmasını engeller
         gridContainer.innerHTML = '';
 
         for (let y = 0; y < level.rows; y++) {
@@ -464,11 +490,9 @@
                 
                 if (cellVal === 'G') {
                     const goalImg = document.createElement('div');
-                    goalImg.className = 'entity flex justify-center items-center text-4xl sm:text-5xl';
-                    goalImg.style.backgroundColor = 'rgba(255, 255, 255, 0.4)'; // Hafif arka plan
+                    goalImg.className = 'w-full h-full flex justify-center items-center relative z-10';
                     goalImg.style.animation = 'bounce 2s infinite';
-                    // Resim yüklenemezse (henüz dosyayı koymadıysanız) otomatik emoji gösterir
-                    goalImg.innerHTML = `<img src="${ASSETS.goal}" onerror="this.outerHTML='🥥'" class="w-full h-full object-contain relative z-10 drop-shadow-md">`;
+                    goalImg.innerHTML = `<img src="${ASSETS.goal}" onerror="this.outerHTML='<span style=\\'font-size: 3rem;\\'>🥥</span>'" class="w-[80%] h-[80%] object-contain drop-shadow-md">`;
                     cell.appendChild(goalImg);
                 }
                 
@@ -476,18 +500,14 @@
             }
         }
 
-        // Add Player
+        // Add Player (Arka plan ve çerçeveler kaldırıldı, saf görsel)
         const playerEl = document.createElement('div');
         playerEl.id = 'player';
-        playerEl.className = 'entity flex justify-center items-center text-4xl sm:text-5xl';
-        playerEl.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.4)';
-        playerEl.style.border = '4px solid white';
-        playerEl.style.backgroundColor = '#38bdf8'; // Geçici mavi arka plan
-        // Resim yüklenemezse otomatik emoji gösterir
-        playerEl.innerHTML = `<img src="${ASSETS.player}" onerror="this.outerHTML='🧒'" class="w-full h-full object-cover relative z-10 rounded-full">`;
+        playerEl.className = 'entity';
+        playerEl.innerHTML = `<img src="${ASSETS.player}" onerror="this.outerHTML='<span style=\\'font-size: 3rem;\\'>🧒</span>'" class="drop-shadow-lg">`;
         gridContainer.appendChild(playerEl);
         
-        updatePlayerVisuals(level);
+        resizeGrid(); // Izgarayı ekrana mükemmel kareler olarak tam oturt
         
         // 3. Generate slots and render empty commands safely
         initWorkspaceSlots();
@@ -498,17 +518,46 @@
         loadLevel(currentLevelIndex);
     }
 
+    function resizeGrid() {
+        const level = LEVELS[currentLevelIndex];
+        const wrapper = gridContainer.parentElement;
+        if (!level || !wrapper) return;
+
+        // Container içindeki boşluğu hesaba katarak en uygun "Kare" boyutunu bul
+        const availableW = wrapper.clientWidth - 32; 
+        const availableH = wrapper.clientHeight - 32;
+        
+        const cellW = availableW / level.cols;
+        const cellH = availableH / level.rows;
+        
+        const cellSize = Math.floor(Math.min(cellW, cellH));
+        
+        // Zemin oyun tahtasını piksel piksel kilitliyoruz ki kayma olmasın
+        gridContainer.style.width = `${cellSize * level.cols}px`;
+        gridContainer.style.height = `${cellSize * level.rows}px`;
+        
+        updatePlayerVisuals(level);
+    }
+
+    window.addEventListener('resize', () => {
+        if (document.getElementById('screen-game').classList.contains('active')) {
+            resizeGrid();
+        }
+    });
+
     function updatePlayerVisuals(level) {
         const playerEl = document.getElementById('player');
         if (!playerEl) return;
         
-        const cellWidth = 100 / level.cols;
-        const cellHeight = 100 / level.rows;
+        const cellPctX = 100 / level.cols;
+        const cellPctY = 100 / level.rows;
         
-        playerEl.style.left = `calc(${playerPos.x * cellWidth}% + ${cellWidth * 0.1}%)`;
-        playerEl.style.top = `calc(${playerPos.y * cellHeight}% + ${cellHeight * 0.1}%)`;
-        playerEl.style.width = `${cellWidth * 0.8}%`;
-        playerEl.style.height = `${cellHeight * 0.8}%`;
+        // Karakterin kapsayıcısını tam olarak tek bir karenin büyüklüğüne eşitliyoruz.
+        // Bu sayede attığı adım kare boyutunu asla geçemez.
+        playerEl.style.width = `${cellPctX}%`;
+        playerEl.style.height = `${cellPctY}%`;
+        playerEl.style.left = `${playerPos.x * cellPctX}%`;
+        playerEl.style.top = `${playerPos.y * cellPctY}%`;
     }
 
     // --- STREAMING_CHUNK:Managing the workspace slot UI and logic... ---
